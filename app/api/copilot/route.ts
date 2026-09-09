@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   if (!key) return NextResponse.json({ fallback: true, mode: "practice" });
   let prompt: string;
   if (body.mode === "brief") {
-    prompt = `You are a senior Product Manager. Convert the complete discovery conversation into a precise problem brief. Refine blunt answers into professional, self-contained language without changing their intent or inventing facts. Keep these concepts distinct: desiredOutcome describes the improvement experienced by the USER; businessImpact describes the measurable value for the BUSINESS. The problem must state the current user difficulty, not merely repeat a requested feature. Preserve every explicitly requested capability, including technologies such as AR, and label unsupported claims as assumptions.
+    prompt = `You are a senior Product Manager. Convert the complete discovery conversation into a precise problem brief. Refine blunt answers into professional, self-contained language without changing their intent or inventing facts. Keep these concepts distinct: desiredOutcome describes the improvement experienced by the USER; businessImpact describes the measurable value for the BUSINESS. The problem must state the current user difficulty, not merely repeat a requested feature. Preserve every explicitly requested capability and label unsupported claims as assumptions. Never introduce a technology, product, geography, audience, feature, monetisation model, or business objective that is absent from the current project inputs.
 
 Return only JSON matching {"problem":{"title":"string","targetUsers":"string","problem":"string","currentBehavior":"string","desiredOutcome":"string","businessImpact":"string","evidence":["string"],"assumptions":["string"],"constraints":["string"],"successCriteria":["string"]}}.
 Application: ${project.applicationName}
@@ -21,10 +21,13 @@ Uploaded CSV summary: ${JSON.stringify(project.fileSummary)}
 Qualitative evidence: ${project.evidenceNotes || "None supplied"}
 Conversation: ${JSON.stringify(project.messages)}`;
   } else if (body.mode === "solutions") {
-    prompt = `You are a senior Product Manager facilitating solution discovery. Generate exactly three distinct, actionable recommendations grounded in the approved problem brief, analysis, request, and evidence. Every recommendation must explicitly address the main requested capability; if AR or Augmented Reality was requested, AR must appear in the recommendation name or description. Do not return generic templates. Include one direct solution, one complementary or monetisation-aware solution when relevant, and one phased MVP/pilot. Advertising must be clearly labelled and must not compromise core navigation or user trust.
+    prompt = `You are a senior Product Manager facilitating solution discovery. Generate exactly three distinct, actionable recommendations grounded only in the approved problem brief, analysis, initial request, application, dataset, and evidence supplied below. Every recommendation must address the current user's problem and desired outcome. Do not return generic templates. Include one direct experience improvement, one evidence-based complementary approach, and one phased MVP or experiment.
+
+STRICT CONTEXT BOUNDARY: Never introduce any technology, product, geography, audience, feature, advertising or monetisation mechanism that is not explicitly present in the current project inputs. Ignore examples or requirements from any other project. Before returning, verify that every noun and capability in the recommendations belongs to this project.
 
 Return only JSON matching {"solutions":[{"id":"short-kebab-case","name":"string","description":"string","impact":"High|Medium|Low","effort":"High|Medium|Low","risks":["string","string"]}]}.
 Initial request: ${project.rawRequest}
+Application: ${project.applicationName}
 Approved problem: ${JSON.stringify(project.problem)}
 Analysis: ${JSON.stringify(project.analysis)}
 Dataset summary: ${JSON.stringify(project.fileSummary)}`;

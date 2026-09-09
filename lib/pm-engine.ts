@@ -181,13 +181,6 @@ export function contextualAnswerRefinement(
   if (lower === "no" && question.includes("evidence")) {
     return "No supporting evidence is currently available, so this should be treated as an assumption requiring validation.";
   }
-  if (
-    /what happens today|experience break|current (problem|behaviour|behavior)/.test(question) &&
-    /camera|building|nearby shop|nearby business|augmented reality|\bAR\b/i.test(clean)
-  ) {
-    return "Walking users currently view routes and nearby businesses on the mobile map. The proposed improvement is a camera-based AR navigation experience that overlays directions on the real world and highlights the relevant destination, shop, or business directly on the building.";
-  }
-
   // Gemini handles nuanced answers. These safe rules keep common one-word
   // answers useful even if the API is unavailable or times out.
   if (clean.split(/\s+/).length <= 4) {
@@ -205,28 +198,6 @@ export function buildProblem(project: Project): ProblemBrief {
   const a = project.messages
     .filter((m) => m.role === "user")
     .map((m) => m.refinedContent || m.content);
-  const context = `${project.rawRequest || ""} ${a.join(" ")}`;
-  const isArRequest = /\bAR\b|augmented reality|camera.{0,30}(navigation|direction)|navigation.{0,30}camera/i.test(context);
-  if (isArRequest) {
-    return {
-      title: "AR navigation and local discovery for walking users",
-      targetUsers: a[1] || "Walking users who use Google Maps for nearby navigation and local discovery.",
-      problem: "Walking users currently rely on a two-dimensional map to follow routes and identify nearby places. They cannot use the phone camera to see navigation guidance overlaid on the real world or clearly identify the relevant destination, shop, or business on a building.",
-      currentBehavior: "Users switch between the map and their physical surroundings, manually interpreting the route and matching nearby businesses to real-world buildings.",
-      desiredOutcome: "Walking users can open a camera-based AR view, follow contextual navigation cues, and quickly identify the correct destination or relevant nearby business in their surroundings.",
-      businessImpact: a[4]
-        ? `The intended business impact is ${a[4].replace(/[.!]+$/, "").toLowerCase()}. This should be validated through engagement, AR navigation completion, repeat usage, and clearly labelled sponsored-place interactions.`
-        : "Increase engagement and competitive differentiation while creating a responsible, clearly labelled placement opportunity for relevant sponsored businesses.",
-      evidence: [a[5], project.evidenceNotes].filter(Boolean),
-      assumptions: a[5] ? [] : ["Demand for camera-based AR navigation and sponsored-place discovery still requires user validation."],
-      constraints: a[6] ? [a[6]] : [],
-      successCriteria: [
-        "Increase successful walking-navigation completion in the pilot segment",
-        "Reduce time and confusion when identifying the destination building",
-        "Measure sponsored-place engagement without reducing navigation clarity or user trust",
-      ],
-    };
-  }
   return {
     title: (project.rawRequest || "Product opportunity").slice(0, 90),
     targetUsers: a[1] || "Target segment to be confirmed",
@@ -292,58 +263,29 @@ export function buildAnalysis(p: Project): Analysis {
 }
 export function buildSolutions(p: Project): Solution[] {
   const o = p.problem?.desiredOutcome || "the desired outcome";
-  const context = `${p.rawRequest || ""} ${p.problem?.problem || ""} ${o}`;
-  if (/\bAR\b|augmented reality|camera.{0,30}(navigation|direction)/i.test(context)) {
-    return [
-      {
-        id: "ar-live-navigation",
-        name: "AR Live View navigation",
-        description: "Add a camera-based walking mode that overlays directional arrows, turn guidance, destination distance, and a clear highlight on the correct building or entrance.",
-        impact: "High",
-        effort: "High",
-        risks: ["Location and compass accuracy", "Battery usage", "Pedestrian safety"],
-      },
-      {
-        id: "ar-local-discovery",
-        name: "AR local discovery and sponsored places",
-        description: "Show relevant nearby shops and businesses as AR labels on real-world buildings, with paid placements clearly marked as Sponsored and separated from essential navigation guidance.",
-        impact: "High",
-        effort: "High",
-        risks: ["Visual clutter", "Advertising trust", "Merchant-location accuracy"],
-      },
-      {
-        id: "ar-pilot",
-        name: "Focused AR walking pilot",
-        description: "Pilot AR navigation and place discovery with walking users in selected high-density areas and on supported devices before expanding coverage or advertising inventory.",
-        impact: "Medium",
-        effort: "Medium",
-        risks: ["Limited initial coverage", "Device compatibility", "Pilot selection bias"],
-      },
-    ];
-  }
   return [
     {
       id: "guided",
-      name: "Guided experience",
-      description: `Redesign the critical journey with contextual guidance and fewer decisions so users reach ${o}.`,
+      name: "Direct experience improvement",
+      description: `Improve the specific journey described in the approved problem so the target users can achieve this outcome: ${o}`,
       impact: "High",
       effort: "Medium",
       risks: ["May add clutter", "Needs usability validation"],
     },
     {
       id: "signal",
-      name: "Personalised intervention",
+      name: "Evidence-led intervention",
       description:
-        "Use behavioural signals to provide the right prompt, recommendation, or recovery action at the moment of friction.",
+        "Use the connected dataset and supplied evidence to identify the highest-impact segment and deliver a relevant intervention at the point of friction.",
       impact: "High",
       effort: "High",
       risks: ["Signal quality", "Privacy and relevance"],
     },
     {
       id: "lean",
-      name: "Lean friction removal",
+      name: "Focused MVP experiment",
       description:
-        "Fix the highest-confidence friction point first and instrument the journey before investing in a larger redesign.",
+        "Test the smallest version of the proposed improvement with the target segment, measure the agreed outcome, and expand only after validating the result.",
       impact: "Medium",
       effort: "Low",
       risks: ["May treat a symptom", "Requires clean instrumentation"],

@@ -968,12 +968,26 @@ function AnalysisView({
         body: JSON.stringify({ mode: "solutions", project }),
       });
       const data = response.ok ? await response.json() : null;
-      const requestRequiresAr = /\bAR\b|augmented reality/i.test(`${project.rawRequest || ""} ${project.problem?.problem || ""}`);
-      const generatedSolutionsMentionAr = /\bAR\b|augmented reality/i.test(JSON.stringify(data?.solutions || []));
+      const sourceContext = JSON.stringify({
+        applicationName: project.applicationName,
+        rawRequest: project.rawRequest,
+        problem: project.problem,
+        analysis: project.analysis,
+        evidenceNotes: project.evidenceNotes,
+      });
+      const generatedContext = JSON.stringify(data?.solutions || []);
+      const contextBoundaries = [
+        /\bAR\b|augmented reality/i,
+        /navigation|landmark|walking route/i,
+        /sponsored|advertis(?:e|ing|ement)|moneti[sz]/i,
+      ];
+      const introducesUnsupportedConcept = contextBoundaries.some(
+        (pattern) => pattern.test(generatedContext) && !pattern.test(sourceContext),
+      );
       if (
         Array.isArray(data?.solutions) &&
         data.solutions.length >= 3 &&
-        (!requestRequiresAr || generatedSolutionsMentionAr)
+        !introducesUnsupportedConcept
       ) solutions = data.solutions;
     } catch {
       // The request-aware local recommendations remain available.
