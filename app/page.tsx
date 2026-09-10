@@ -41,6 +41,50 @@ import {
   stages,
 } from "@/lib/pm-engine";
 const STORAGE = "pm-copilot-ts-projects-v2";
+const toStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is string | number | boolean =>
+        ["string", "number", "boolean"].includes(typeof item),
+      )
+      .map(String)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  if (typeof value === "string" && value.trim()) return [value.trim()];
+  return [];
+};
+
+const normaliseProblemBrief = (
+  candidate: Partial<ProblemBrief>,
+  fallback: ProblemBrief,
+): ProblemBrief => ({
+  title: typeof candidate.title === "string" ? candidate.title : fallback.title,
+  targetUsers:
+    typeof candidate.targetUsers === "string"
+      ? candidate.targetUsers
+      : fallback.targetUsers,
+  problem:
+    typeof candidate.problem === "string" ? candidate.problem : fallback.problem,
+  currentBehavior:
+    typeof candidate.currentBehavior === "string"
+      ? candidate.currentBehavior
+      : fallback.currentBehavior,
+  desiredOutcome:
+    typeof candidate.desiredOutcome === "string"
+      ? candidate.desiredOutcome
+      : fallback.desiredOutcome,
+  businessImpact:
+    typeof candidate.businessImpact === "string"
+      ? candidate.businessImpact
+      : fallback.businessImpact,
+  evidence: toStringArray(candidate.evidence),
+  assumptions: toStringArray(candidate.assumptions),
+  constraints: toStringArray(candidate.constraints),
+  successCriteria: toStringArray(candidate.successCriteria).length
+    ? toStringArray(candidate.successCriteria)
+    : fallback.successCriteria,
+});
 const saveBlob = (name: string, content: string, type = "application/json") => {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([content], { type }));
@@ -768,7 +812,7 @@ function Evidence({
         data?.problem?.businessImpact &&
         data.problem.desiredOutcome.trim().toLowerCase() !== data.problem.businessImpact.trim().toLowerCase()
       ) {
-        problem = data.problem;
+        problem = normaliseProblemBrief(data.problem, problem);
       }
     } catch {
       // The request-aware local brief remains available if Gemini is unavailable.
@@ -1244,7 +1288,8 @@ function NumberField({
 }
 function enrichDocument(title: string, content: string, project: Project) {
   const brief = project.problem!;
-  const bullets = (items: string[]) => items.map((item) => `- ${item}`).join("\n");
+  const bullets = (items: unknown) =>
+    toStringArray(items).map((item) => `- ${item}`).join("\n");
   const common = `\n\n## Source context and document status\n- Product: ${project.applicationName}\n- Request type: ${project.requestType}\n- Dataset: ${project.fileName} (${project.fileSummary?.rows.toLocaleString()} rows, ${project.fileSummary?.columns.length} columns)\n- Status: Draft for review; unconfirmed information is not presented as fact\n- Evidence quality: ${project.fileSummary?.dataQualityScore}% field completeness, with qualitative evidence ${brief.evidence.length ? "included" : "still to be collected"}\n\n## Assumptions requiring validation\n${bullets(brief.assumptions.length ? brief.assumptions : ["No explicit assumptions captured; stakeholder validation remains required"])}\n\n## Constraints\n${bullets(brief.constraints.length ? brief.constraints : ["No explicit constraints captured; technical, legal, budget, and timeline constraints remain to be confirmed"])}\n\n## Open decisions\n- Confirm baseline and target for the primary metric\n- Confirm owners, delivery estimate, dependencies, and decision dates\n- Confirm privacy, security, accessibility, legal, support, and operational requirements\n- Confirm pilot audience, sample size, duration, stop conditions, and rollback criteria\n\n## Review and approval\nProduct, Engineering, Design, Data, and applicable business/control owners should review this draft. Material changes to scope, metrics, risk, cost, or timing should be recorded before approval.`;
   const additions: Record<string, string> = {
     PRD: `\n\n## Detailed functional requirements\n- Support the approved target user and critical journey from entry through completion\n- Define eligibility, entry points, permissions, success, failure, loading, empty, retry, and recovery states\n- Instrument exposure, interaction, completion, abandonment, error, and recovery events\n- Allow controlled pilot rollout and rollback without requiring a full release\n- Make the primary metric and guardrails observable before exposure increases\n\n## Non-functional requirements\n- Performance: Establish targets from the current baseline with Engineering\n- Reliability: Define monitoring, alerting, fallback, incident ownership, and rollback\n- Accessibility: Review against the organisation's applicable standard\n- Privacy and security: Collect only necessary data and complete required reviews\n- Compatibility: Confirm supported devices, platforms, browsers, and versions\n\n## Analytics specification\nFor each event, document the name, business definition, trigger, properties, source, owner, validation query, and dashboard. Monitor missing, duplicated, delayed, and invalid events. Segment results using the approved target-user definition.\n\n## Release readiness checklist\n- User journey and edge cases validated\n- Acceptance criteria passed\n- Events and dashboards verified\n- Guardrails, alerts, fallback, and rollback ready\n- Support and operations briefed\n- Required stakeholder approvals recorded`,
@@ -1264,12 +1309,18 @@ function PlanView({
   create: () => void;
 }) {
   const [selectedDocumentIndex, setSelectedDocumentIndex] = useState(0);
-  const plan = project.plan!,
+  const rawPlan = project.plan!,
+    plan = {
+      ...rawPlan,
+      guardrails: toStringArray(rawPlan.guardrails),
+      mvp: toStringArray(rawPlan.mvp),
+      okrs: toStringArray(rawPlan.okrs),
+    },
     solution = project.solutions!.find(
       (s) => s.id === project.selectedSolutionId,
     )!,
     recommendations = project.solutions!.filter((item) => (project.selectedSolutionIds || [project.selectedSolutionId]).includes(item.id)),
-    list = (items: string[]) => items.map((item) => `- ${item}`).join("\n"),
+    list = (items: unknown) => toStringArray(items).map((item) => `- ${item}`).join("\n"),
     recommendationList = recommendations.map((item, index) => `${index + 1}. **${item.name}** — ${item.description}`).join("\n"),
     brief = project.problem!,
     prd = `# Product Requirements Document (PRD)\n\n## 1. Overview\n${brief.title}\n\n## 2. Problem statement\n${brief.problem}\n\n## 3. Target users\n${brief.targetUsers}\n\n## 4. Current behaviour\n${brief.currentBehavior}\n\n## 5. Goals\n${brief.desiredOutcome}\n\n## 6. Business impact\n${brief.businessImpact}\n\n## 7. Evidence\n${list(brief.evidence.length ? brief.evidence : ["Quantitative CSV analysis; qualitative validation pending"])}\n\n## 8. Recommended solutions\n${recommendationList}\n\n## 9. MVP scope\n${list(plan.mvp)}\n\n## 10. User stories\n- As a ${brief.targetUsers}, I want ${solution.name.toLowerCase()} so that I can achieve ${brief.desiredOutcome.toLowerCase()}.\n- As a product team, we want journey instrumentation so that we can measure impact safely.\n\n## 11. Acceptance criteria\n- The primary journey is instrumented end to end.\n- The MVP works for the agreed target segment.\n- Error, loading, empty, and recovery states are handled.\n- Accessibility and privacy requirements are reviewed.\n- Primary and guardrail metrics are visible before rollout.\n\n## 12. Success metrics\n- North Star: ${plan.northStar}\n- Primary metric: ${plan.primaryMetric}\n${list(plan.guardrails.map((item) => `Guardrail: ${item}`))}\n\n## 13. Risks and dependencies\n${list([...solution.risks, ...brief.constraints, "Engineering feasibility", "Analytics instrumentation", "Design and stakeholder approval"])}\n\n## 14. Rollout\nPilot → measure → review guardrails → iterate → staged expansion.`,
@@ -1424,7 +1475,7 @@ function PlanCard({
         <h3 className="font-semibold">{title}</h3>
       </div>
       <div className="mt-4 space-y-2">
-        {items.map((x) => (
+        {toStringArray(items).map((x) => (
           <div key={x} className="flex gap-2 text-sm leading-6 text-slate-600">
             <Check size={15} className="mt-1 shrink-0 text-emerald-500" />
             {x}
